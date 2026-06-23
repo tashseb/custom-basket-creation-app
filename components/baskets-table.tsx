@@ -2,6 +2,11 @@
 
 import { Badge } from "@/components/ui/badge"
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
+import {
   CheckCircleIcon,
   ClockIcon,
   XCircleIcon,
@@ -9,8 +14,9 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   ArrowUpDownIcon,
+  MessageSquareIcon,
 } from "lucide-react"
-import type { Basket, BasketStatus } from "@/lib/data"
+import type { Basket, BasketStatus, Approver } from "@/lib/data"
 import { useState } from "react"
 
 interface BasketsTableProps {
@@ -64,30 +70,152 @@ function RiskBadge({ rating }: { rating: "Low" | "Medium" | "High" }) {
   return <span className={`text-xs font-semibold tabular-nums ${map[rating]}`}>{rating}</span>
 }
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
+}
+
+function approverStatusMeta(status: Approver["status"]) {
+  if (status === "Approved")
+    return {
+      icon: <CheckCircleIcon className="size-3" />,
+      color: "text-[var(--status-approved)]",
+      bg: "bg-[var(--status-approved)]/10",
+      border: "border-[var(--status-approved)]/30",
+      dot: "bg-[var(--status-approved)] ring-[var(--status-approved)]/25",
+      label: "Approved",
+    }
+  if (status === "Rejected")
+    return {
+      icon: <XCircleIcon className="size-3" />,
+      color: "text-destructive",
+      bg: "bg-destructive/10",
+      border: "border-destructive/30",
+      dot: "bg-destructive ring-destructive/25",
+      label: "Rejected",
+    }
+  return {
+    icon: <ClockIcon className="size-3" />,
+    color: "text-[var(--status-pending)]",
+    bg: "bg-[var(--status-pending)]/10",
+    border: "border-[var(--status-pending)]/30",
+    dot: "bg-muted-foreground/35 ring-muted-foreground/15",
+    label: "Pending",
+  }
+}
+
+function ApproverCard({ approver }: { approver: Approver }) {
+  const meta = approverStatusMeta(approver.status)
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className={`relative flex items-center justify-center size-7 rounded-full text-[10px] font-bold ring-2 ring-offset-1 ring-offset-card cursor-default select-none transition-transform hover:scale-110 hover:z-10 ${meta.dot}`}
+          style={{ color: "white" }}
+          aria-label={`${approver.name} — ${meta.label}`}
+        >
+          {getInitials(approver.name)}
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-card ${
+              approver.status === "Approved"
+                ? "bg-[var(--status-approved)]"
+                : approver.status === "Rejected"
+                ? "bg-destructive"
+                : "bg-[var(--status-pending)]"
+            }`}
+          />
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="top"
+        align="center"
+        className="w-64 p-0 overflow-hidden shadow-lg"
+      >
+        {/* Header strip */}
+        <div className={`flex items-center gap-3 px-3 py-2.5 ${meta.bg} border-b ${meta.border}`}>
+          <div
+            className={`flex items-center justify-center size-8 rounded-full text-xs font-bold shrink-0 ring-2 ${meta.dot}`}
+            style={{ color: "white" }}
+          >
+            {getInitials(approver.name)}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-semibold text-foreground truncate leading-tight">
+              {approver.name}
+            </span>
+            <span className="text-[11px] text-muted-foreground truncate leading-tight">
+              {approver.role}
+            </span>
+            <span className="text-[10px] text-muted-foreground/70 truncate leading-tight">
+              {approver.department}
+            </span>
+          </div>
+          <div className="ml-auto shrink-0">
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${meta.bg} ${meta.color} ${meta.border}`}
+            >
+              {meta.icon}
+              {meta.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-3 py-2 flex flex-col gap-1.5">
+          {approver.reviewedAt ? (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <ClockIcon className="size-3 shrink-0" />
+              <span>
+                Reviewed{" "}
+                {new Date(approver.reviewedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <ClockIcon className="size-3 shrink-0" />
+              <span>Awaiting review</span>
+            </div>
+          )}
+
+          {approver.comment && (
+            <div className="flex gap-1.5 mt-0.5">
+              <MessageSquareIcon className="size-3 shrink-0 mt-0.5 text-muted-foreground" />
+              <p className="text-[11px] text-foreground/80 leading-relaxed italic">
+                &ldquo;{approver.comment}&rdquo;
+              </p>
+            </div>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
 function ApprovalProgress({ approvers }: { approvers: Basket["approvers"] }) {
   const approved = approvers.filter((a) => a.status === "Approved").length
   const total = approvers.length
-  const hasRejected = approvers.some((a) => a.status === "Rejected")
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex gap-1">
-        {approvers.map((a, i) => (
-          <span
-            key={i}
-            className={`size-2 rounded-full ${
-              a.status === "Approved"
-                ? "bg-[var(--status-approved)]"
-                : a.status === "Rejected"
-                ? "bg-destructive"
-                : "bg-muted-foreground/30"
-            }`}
-          />
+    <div className="flex items-center gap-3">
+      {/* Avatar stack */}
+      <div className="flex -space-x-1.5">
+        {approvers.map((a) => (
+          <ApproverCard key={a.id} approver={a} />
         ))}
       </div>
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {approved}/{total}
-        {hasRejected && <span className="text-destructive ml-1">✕</span>}
+      {/* Tally */}
+      <span className="text-xs tabular-nums text-muted-foreground font-medium">
+        {approved}
+        <span className="text-muted-foreground/50">/{total}</span>
       </span>
     </div>
   )
