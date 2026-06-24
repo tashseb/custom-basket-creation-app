@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -8,25 +9,31 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   CheckCircleIcon,
   ClockIcon,
   XCircleIcon,
-  TrendingUpIcon,
-  BarChart3Icon,
-  UserCheckIcon,
-  CalendarIcon,
   BuildingIcon,
   ListIcon,
   ShieldCheckIcon,
+  PencilIcon,
+  SaveIcon,
+  XIcon,
+  InfoIcon,
+  UserIcon,
 } from "lucide-react"
-import type { Basket, ApproverStatus, BasketStatus } from "@/lib/data"
+import type { Basket, ApproverStatus, BasketStatus, Approver, Viewer } from "@/lib/data"
 
 interface BasketDetailDialogProps {
   basket: Basket | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  viewer: Viewer
+  onUpdateBasket: (basket: Basket) => void
 }
 
 function formatCurrency(value: number) {
@@ -41,6 +48,18 @@ function formatDate(date: string) {
     day: "numeric",
     year: "numeric",
   })
+}
+
+function todayISO() {
+  return new Date().toISOString().split("T")[0]
+}
+
+// Recompute basket status from its approver decisions.
+function deriveStatus(approvers: Approver[], current: BasketStatus): BasketStatus {
+  if (current === "Draft") return "Draft"
+  if (approvers.some((a) => a.status === "Rejected")) return "Rejected"
+  if (approvers.length > 0 && approvers.every((a) => a.status === "Approved")) return "Active"
+  return "Pending Approval"
 }
 
 function StatusBadge({ status }: { status: BasketStatus }) {
@@ -78,15 +97,74 @@ function ApproverStatusBadge({ status }: { status: ApproverStatus }) {
   return <Badge variant="outline" className={`text-xs ${map[status]}`}>{status}</Badge>
 }
 
-export function BasketDetailDialog({ basket, open, onOpenChange }: BasketDetailDialogProps) {
+export function BasketDetailDialog({
+  basket,
+  open,
+  onOpenChange,
+  viewer,
+  onUpdateBasket,
+}: BasketDetailDialogProps) {
+  // ── Local edit state (creator: name + description) ──────────────
+  const [editing, setEditing] = useState(false)
+  const [draftName, setDraftName] = useState("")
+  const [draftDesc, setDraftDesc] = useState("")
+
+  // ── Local approver action state ─────────────────────────────────
+  const [commentDraft, setCommentDraft] = useState("")
+
+  // Reset local state whenever the basket or viewer changes.
+  useEffect(() => {
+    if (basket) {
+      setDraftName(basket.name)
+      setDraftDesc(basket.description)
+    }
+    setEditing(false)
+    setCommentDraft("")
+  }, [basket, viewer])
+
   if (!basket) return null
 
   const approvedCount = basket.approvers.filter((a) => a.status === "Approved").length
   const totalApprovers = basket.approvers.length
 
+  const isCreator = viewer.role === "user"
+  const myApprover = basket.approvers.find((a) => a.name === viewer.name)
+  const isRequiredApprover = viewer.role === "approver" && Boolean(myApprover)
+  const canApprove =
+    isRequiredApprover && basket.status === "Pending Approval" && myApprover?.status === "Pending"
+
+  // Creator may edit name/description on a real (created) basket.
+  const canEditDetails = isCreator
+
+  function handleSaveDetails() {
+    if (!basket) return
+    onUpdateBasket({ ...basket, name: draftName.trim() || basket.name, description: draftDesc.trim() })
+    setEditing(false)
+  }
+
+  function handleApproverDecision(decision: "Approved" | "Rejected") {
+    if (!basket || !myApprover) return
+    const updatedApprovers = basket.approvers.map((a) =>
+      a.id === myApprover.id
+        ? {
+            ...a,
+            status: decision,
+            reviewedAt: todayISO(),
+            comment: commentDraft.trim() || a.comment,
+          }
+        : a
+    )
+    onUpdateBasket({
+      ...basket,
+      approvers: updatedApprovers,
+      status: deriveStatus(updatedApprovers, basket.status),
+    })
+    setCommentDraft("")
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] flex flex-col overflow-hidden font-sans p-0">
+      <DialogContent className="w-[92vw] max-w-[1100px] sm:max-w-[1100px] max-h-[90vh] flex flex-col overflow-hidden font-sans p-0">
 
         {/* ── Header ─────────────────────────────────────────────── */}
         <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
@@ -99,51 +177,86 @@ export function BasketDetailDialog({ basket, open, onOpenChange }: BasketDetailD
                   {basket.category}
                 </Badge>
               </div>
-              <DialogTitle className="text-xl font-semibold text-foreground">
-                {basket.name}
-              </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
-                {basket.description}
-              </DialogDescription>
+
+              {editing ? (
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="basket-name" className="text-xs font-medium text-muted-foreground">
+                      Basket name
+                    </label>
+                    <Input
+                      id="basket-name"
+                      value={draftName}
+                      onChange={(e) => setDraftName(e.target.value)}
+                      className="text-base font-semibold"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="basket-desc" className="text-xs font-medium text-muted-foreground">
+                      Description
+                    </label>
+                    <Textarea
+                      id="basket-desc"
+                      value={draftDesc}
+                      onChange={(e) => setDraftDesc(e.target.value)}
+                      rows={2}
+                      className="resize-none text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Button size="sm" onClick={handleSaveDetails} disabled={!draftName.trim()}>
+                      <SaveIcon data-icon="inline-start" />
+                      Save changes
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditing(false)
+                        setDraftName(basket.name)
+                        setDraftDesc(basket.description)
+                      }}
+                    >
+                      <XIcon data-icon="inline-start" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <DialogTitle className="text-xl font-semibold text-foreground">
+                      {basket.name}
+                    </DialogTitle>
+                    {canEditDetails && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-muted-foreground"
+                        onClick={() => setEditing(true)}
+                      >
+                        <PencilIcon data-icon="inline-start" />
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+                  <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                    {basket.description}
+                  </DialogDescription>
+                </>
+              )}
             </div>
           </DialogHeader>
 
-          {/* Stats strip */}
-          <div className="grid grid-cols-4 gap-3 mt-4">
-            {[
-              {
-                icon: <TrendingUpIcon className="size-4 text-accent" />,
-                label: "Total Value",
-                value: formatCurrency(basket.totalValue),
-              },
-              {
-                icon: <BarChart3Icon className="size-4 text-accent" />,
-                label: "Holdings",
-                value: `${basket.stockCount} stocks`,
-              },
-              {
-                icon: <UserCheckIcon className="size-4 text-accent" />,
-                label: "Approvals",
-                value: `${approvedCount} / ${totalApprovers}`,
-              },
-              {
-                icon: <CalendarIcon className="size-4 text-accent" />,
-                label: "Last Updated",
-                value: formatDate(basket.updatedAt),
-              },
-            ].map(({ icon, label, value }) => (
-              <div
-                key={label}
-                className="flex flex-col gap-1 rounded-lg border border-border bg-muted/50 px-3 py-2.5"
-              >
-                <div className="flex items-center gap-1.5">
-                  {icon}
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                </div>
-                <span className="text-sm font-semibold text-foreground tabular-nums">{value}</span>
-              </div>
-            ))}
-          </div>
+          {/* ── Role / permission banner ─────────────────────────── */}
+          <RoleBanner
+            isCreator={isCreator}
+            isRequiredApprover={isRequiredApprover}
+            canApprove={canApprove}
+            viewer={viewer}
+            myStatus={myApprover?.status}
+            basketStatus={basket.status}
+          />
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────── */}
@@ -167,7 +280,7 @@ export function BasketDetailDialog({ basket, open, onOpenChange }: BasketDetailD
             </TabsList>
           </div>
 
-          {/* ── Stock Holdings Tab ─────────────────────────────── */}
+          {/* ── Stock Holdings Tab (read-only for everyone) ────── */}
           <TabsContent value="holdings" className="flex-1 overflow-y-auto px-6 pb-4 mt-3 data-[state=inactive]:hidden">
             <div className="rounded-lg border border-border overflow-hidden">
               <table className="w-full text-sm">
@@ -247,58 +360,105 @@ export function BasketDetailDialog({ basket, open, onOpenChange }: BasketDetailD
             </div>
 
             <div className="flex flex-col gap-3">
-              {basket.approvers.map((approver, i) => (
-                <div
-                  key={approver.id}
-                  className="flex items-start gap-4 rounded-lg border border-border bg-card px-5 py-4"
-                >
-                  {/* Step number */}
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground mt-0.5">
-                    {i + 1}
-                  </div>
-
-                  {/* Body */}
-                  <div className="flex flex-1 flex-col gap-2">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-semibold text-foreground leading-tight">
-                          {approver.name}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <BuildingIcon className="size-3 shrink-0" />
-                          <span>{approver.role}</span>
-                          <span className="opacity-40">·</span>
-                          <span>{approver.department}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <ApproverStatusIcon status={approver.status} />
-                        <ApproverStatusBadge status={approver.status} />
-                      </div>
+              {basket.approvers.map((approver, i) => {
+                const isMe = viewer.role === "approver" && approver.name === viewer.name
+                const showActions = isMe && canApprove
+                return (
+                  <div
+                    key={approver.id}
+                    className={`flex items-start gap-4 rounded-lg border px-5 py-4 ${
+                      isMe ? "border-accent/50 bg-accent/5 ring-1 ring-accent/20" : "border-border bg-card"
+                    }`}
+                  >
+                    {/* Step number */}
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground mt-0.5">
+                      {i + 1}
                     </div>
 
-                    {approver.comment && (
-                      <div className="rounded-md border border-border bg-muted/50 px-3 py-2.5">
-                        <p className="text-xs text-foreground/80 italic leading-relaxed">
-                          &ldquo;{approver.comment}&rdquo;
-                        </p>
+                    {/* Body */}
+                    <div className="flex flex-1 flex-col gap-2">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-foreground leading-tight">
+                              {approver.name}
+                            </span>
+                            {isMe && (
+                              <Badge variant="outline" className="text-[10px] border-accent/40 text-accent px-1.5 py-0">
+                                You
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <BuildingIcon className="size-3 shrink-0" />
+                            <span>{approver.role}</span>
+                            <span className="opacity-40">·</span>
+                            <span>{approver.department}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <ApproverStatusIcon status={approver.status} />
+                          <ApproverStatusBadge status={approver.status} />
+                        </div>
                       </div>
-                    )}
 
-                    {approver.reviewedAt ? (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <ClockIcon className="size-3 shrink-0" />
-                        <span>Reviewed {formatDate(approver.reviewedAt)}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <ClockIcon className="size-3 shrink-0" />
-                        <span>Awaiting review</span>
-                      </div>
-                    )}
+                      {approver.comment && (
+                        <div className="rounded-md border border-border bg-muted/50 px-3 py-2.5">
+                          <p className="text-xs text-foreground/80 italic leading-relaxed">
+                            &ldquo;{approver.comment}&rdquo;
+                          </p>
+                        </div>
+                      )}
+
+                      {approver.reviewedAt ? (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <ClockIcon className="size-3 shrink-0" />
+                          <span>Reviewed {formatDate(approver.reviewedAt)}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <ClockIcon className="size-3 shrink-0" />
+                          <span>Awaiting review</span>
+                        </div>
+                      )}
+
+                      {/* Approver action panel — only on the viewer's own row */}
+                      {showActions && (
+                        <div className="mt-2 flex flex-col gap-2 rounded-md border border-dashed border-accent/40 bg-card p-3">
+                          <span className="text-xs font-medium text-foreground">
+                            Your decision
+                          </span>
+                          <Textarea
+                            value={commentDraft}
+                            onChange={(e) => setCommentDraft(e.target.value)}
+                            rows={2}
+                            placeholder="Add a comment (optional)…"
+                            className="resize-none text-sm"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-[var(--status-approved)] text-white hover:bg-[var(--status-approved)]/90"
+                              onClick={() => handleApproverDecision("Approved")}
+                            >
+                              <CheckCircleIcon data-icon="inline-start" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleApproverDecision("Rejected")}
+                            >
+                              <XCircleIcon data-icon="inline-start" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </TabsContent>
         </Tabs>
@@ -311,5 +471,55 @@ export function BasketDetailDialog({ basket, open, onOpenChange }: BasketDetailD
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function RoleBanner({
+  isCreator,
+  isRequiredApprover,
+  canApprove,
+  viewer,
+  myStatus,
+  basketStatus,
+}: {
+  isCreator: boolean
+  isRequiredApprover: boolean
+  canApprove: boolean
+  viewer: Viewer
+  myStatus?: ApproverStatus
+  basketStatus: BasketStatus
+}) {
+  let icon = <InfoIcon className="size-4 shrink-0" />
+  let tone = "border-border bg-muted/50 text-muted-foreground"
+  let message = ""
+
+  if (isCreator) {
+    icon = <UserIcon className="size-4 shrink-0 text-primary" />
+    tone = "border-primary/20 bg-primary/5 text-foreground"
+    message =
+      "Viewing as the creator. You can edit the basket name and description. Holdings and approvals are read-only."
+  } else if (isRequiredApprover) {
+    if (canApprove) {
+      icon = <ShieldCheckIcon className="size-4 shrink-0 text-accent" />
+      tone = "border-accent/30 bg-accent/5 text-foreground"
+      message =
+        "You are a required approver. Review the holdings, then approve or reject in the Approval Chain tab."
+    } else if (myStatus && myStatus !== "Pending") {
+      icon = <CheckCircleIcon className="size-4 shrink-0 text-[var(--status-approved)]" />
+      tone = "border-border bg-muted/50 text-muted-foreground"
+      message = `You have already ${myStatus.toLowerCase()} this basket. Your decision is recorded below.`
+    } else {
+      message = `This basket is ${basketStatus}. No approval action is required from you right now.`
+    }
+  } else {
+    icon = <InfoIcon className="size-4 shrink-0" />
+    message = `Viewing as ${viewer.name}. You are not a required approver for this basket — view only.`
+  }
+
+  return (
+    <div className={`mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${tone}`}>
+      {icon}
+      <span>{message}</span>
+    </div>
   )
 }

@@ -7,43 +7,26 @@ import { BasketsTable } from "@/components/baskets-table"
 import { CreateBasketDialog } from "@/components/create-basket-dialog"
 import { BasketDetailDialog } from "@/components/basket-detail-dialog"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   PlusIcon,
   LayersIcon,
-  TrendingUpIcon,
-  ClockIcon,
-  CheckCircleIcon,
   SearchIcon,
+  ChevronsUpDownIcon,
+  UserIcon,
+  ShieldCheckIcon,
+  CheckIcon,
 } from "lucide-react"
-import { MOCK_BASKETS, type Basket } from "@/lib/data"
+import { MOCK_BASKETS, VIEWERS, type Basket, type Viewer } from "@/lib/data"
 
 type FilterStatus = "All" | "Active" | "Pending Approval" | "Draft" | "Rejected"
-
-function StatCard({
-  label,
-  value,
-  icon,
-  sub,
-}: {
-  label: string
-  value: string | number
-  icon: React.ReactNode
-  sub?: string
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {label}
-        </span>
-        <div className="flex size-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
-          {icon}
-        </div>
-      </div>
-      <span className="text-2xl font-bold text-foreground tabular-nums">{value}</span>
-      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
-    </div>
-  )
-}
 
 export default function HomePage() {
   const [baskets, setBaskets] = useState<Basket[]>(MOCK_BASKETS)
@@ -52,10 +35,17 @@ export default function HomePage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("All")
   const [search, setSearch] = useState("")
+  const [viewer, setViewer] = useState<Viewer>(VIEWERS[0])
 
   const handleRowClick = (basket: Basket) => {
     setSelectedBasket(basket)
     setDetailOpen(true)
+  }
+
+  const handleUpdateBasket = (updated: Basket) => {
+    const stamped = { ...updated, updatedAt: new Date().toISOString().split("T")[0] }
+    setBaskets((prev) => prev.map((b) => (b.id === stamped.id ? stamped : b)))
+    setSelectedBasket(stamped)
   }
 
   const handleCreateBasket = (
@@ -90,13 +80,6 @@ export default function HomePage() {
     Rejected: baskets.filter((b) => b.status === "Rejected").length,
   }
 
-  const totalAUM = baskets
-    .filter((b) => b.status === "Active")
-    .reduce((sum, b) => sum + b.totalValue, 0)
-
-  const formatAUM = (v: number) =>
-    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1_000).toFixed(0)}K`
-
   const FILTER_OPTIONS: FilterStatus[] = ["All", "Active", "Pending Approval", "Draft", "Rejected"]
 
   return (
@@ -116,15 +99,59 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="size-2 rounded-full bg-[var(--status-approved)]" />
-            Live &middot;{" "}
-            {new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-left transition-colors hover:bg-muted">
+              <div
+                className={`flex size-7 items-center justify-center rounded-full text-primary-foreground ${
+                  viewer.role === "approver" ? "bg-accent" : "bg-primary"
+                }`}
+              >
+                {viewer.role === "approver" ? (
+                  <ShieldCheckIcon className="size-3.5" />
+                ) : (
+                  <UserIcon className="size-3.5" />
+                )}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-foreground leading-none">
+                  {viewer.name}
+                </span>
+                <span className="text-[11px] text-muted-foreground leading-none mt-0.5">
+                  {viewer.role === "approver" ? "Approver" : "Creator"} &middot; {viewer.title}
+                </span>
+              </div>
+              <ChevronsUpDownIcon className="size-3.5 text-muted-foreground ml-1" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                View as
+              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                {VIEWERS.filter((v) => v.role === "user").map((v) => (
+                  <ViewerMenuItem
+                    key={v.id}
+                    viewer={v}
+                    active={v.id === viewer.id}
+                    onSelect={() => setViewer(v)}
+                  />
+                ))}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Approvers
+              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                {VIEWERS.filter((v) => v.role === "approver").map((v) => (
+                  <ViewerMenuItem
+                    key={v.id}
+                    viewer={v}
+                    active={v.id === viewer.id}
+                    onSelect={() => setViewer(v)}
+                  />
+                ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -141,34 +168,6 @@ export default function HomePage() {
             <PlusIcon data-icon="inline-start" />
             New Basket
           </Button>
-        </div>
-
-        {/* ── Stats cards ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-4 gap-4">
-          <StatCard
-            label="Total Baskets"
-            value={baskets.length}
-            icon={<LayersIcon className="size-4" />}
-            sub={`${statusCounts.Active} active`}
-          />
-          <StatCard
-            label="Active AUM"
-            value={formatAUM(totalAUM)}
-            icon={<TrendingUpIcon className="size-4" />}
-            sub="Across all active baskets"
-          />
-          <StatCard
-            label="Pending Review"
-            value={statusCounts["Pending Approval"]}
-            icon={<ClockIcon className="size-4" />}
-            sub="Awaiting approval"
-          />
-          <StatCard
-            label="Fully Approved"
-            value={statusCounts.Active}
-            icon={<CheckCircleIcon className="size-4" />}
-            sub="Ready to sell to clients"
-          />
         </div>
 
         {/* ── Filters + search ────────────────────────────────────── */}
@@ -232,7 +231,42 @@ export default function HomePage() {
         basket={selectedBasket}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        viewer={viewer}
+        onUpdateBasket={handleUpdateBasket}
       />
     </div>
+  )
+}
+
+function ViewerMenuItem({
+  viewer,
+  active,
+  onSelect,
+}: {
+  viewer: Viewer
+  active: boolean
+  onSelect: () => void
+}) {
+  return (
+    <DropdownMenuItem onClick={onSelect} className="gap-2.5 py-2">
+      <div
+        className={`flex size-7 items-center justify-center rounded-full text-primary-foreground ${
+          viewer.role === "approver" ? "bg-accent" : "bg-primary"
+        }`}
+      >
+        {viewer.role === "approver" ? (
+          <ShieldCheckIcon className="size-3.5" />
+        ) : (
+          <UserIcon className="size-3.5" />
+        )}
+      </div>
+      <div className="flex flex-col flex-1 min-w-0">
+        <span className="text-xs font-medium text-foreground leading-tight">{viewer.name}</span>
+        <span className="text-[11px] text-muted-foreground leading-tight truncate">
+          {viewer.title}
+        </span>
+      </div>
+      {active && <CheckIcon className="size-4 text-accent shrink-0" />}
+    </DropdownMenuItem>
   )
 }

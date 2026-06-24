@@ -2,6 +2,26 @@ export type BasketStatus = "Active" | "Pending Approval" | "Draft" | "Rejected"
 
 export type ApproverStatus = "Approved" | "Pending" | "Rejected"
 
+// ─── Viewer / Role model ─────────────────────────────────────────────────────
+
+export type ViewerRole = "user" | "approver"
+
+export interface Viewer {
+  id: string
+  name: string
+  role: ViewerRole
+  title: string
+}
+
+// The personas you can "View as". The user is the creator; approvers map to the
+// approver records on each basket by matching `name`.
+export const VIEWERS: Viewer[] = [
+  { id: "v-user", name: "Sarah Mitchell", role: "user", title: "Portfolio Creator" },
+  { id: "v-jt", name: "James Thornton", role: "approver", title: "Chief Risk Officer" },
+  { id: "v-lo", name: "Linda Okafor", role: "approver", title: "Head of Compliance" },
+  { id: "v-dp", name: "David Park", role: "approver", title: "Portfolio Director" },
+]
+
 export interface Stock {
   id: string
   ticker: string
