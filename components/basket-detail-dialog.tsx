@@ -25,8 +25,10 @@ import {
   XIcon,
   InfoIcon,
   UserIcon,
+  LinkIcon,
+  CheckIcon,
 } from "lucide-react"
-import type { Basket, ApproverStatus, BasketStatus, Approver, Viewer } from "@/lib/data"
+import { VIEWERS, type Basket, type ApproverStatus, type BasketStatus, type Approver, type Viewer } from "@/lib/data"
 
 interface BasketDetailDialogProps {
   basket: Basket | null
@@ -95,6 +97,43 @@ function ApproverStatusBadge({ status }: { status: ApproverStatus }) {
     Rejected: "bg-destructive/10 text-destructive border-destructive/20",
   }
   return <Badge variant="outline" className={`text-xs ${map[status]}`}>{status}</Badge>
+}
+
+function CopyLinkButton({ basketId, approverId }: { basketId: string; approverId: string }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    const url = `${window.location.origin}/review/${basketId}/${approverId}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); handleCopy() }}
+      title="Copy approval link to send via email"
+      className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+        copied
+          ? "border-[var(--status-approved)]/40 bg-[var(--status-approved)]/10 text-[var(--status-approved)]"
+          : "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+    >
+      {copied ? (
+        <>
+          <CheckIcon className="size-3" />
+          Copied
+        </>
+      ) : (
+        <>
+          <LinkIcon className="size-3" />
+          Copy link
+        </>
+      )}
+    </button>
+  )
 }
 
 export function BasketDetailDialog({
@@ -371,6 +410,8 @@ export function BasketDetailDialog({
               {basket.approvers.map((approver, i) => {
                 const isMe = viewer.role === "approver" && approver.name === viewer.name
                 const showActions = isMe && canApprove
+                // Map approver name to a VIEWERS id for the review deep-link
+                const approverViewer = VIEWERS.find((v) => v.name === approver.name)
                 return (
                   <div
                     key={approver.id}
@@ -387,7 +428,7 @@ export function BasketDetailDialog({
                     <div className="flex flex-1 flex-col gap-2">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-semibold text-foreground leading-tight">
                               {approver.name}
                             </span>
@@ -395,6 +436,13 @@ export function BasketDetailDialog({
                               <Badge variant="outline" className="text-[10px] border-accent/40 text-accent px-1.5 py-0">
                                 You
                               </Badge>
+                            )}
+                            {/* Only show the copy link when viewing as creator and approver has a matching viewer ID */}
+                            {isCreator && approverViewer && approver.status === "Pending" && (
+                              <CopyLinkButton
+                                basketId={basket.id}
+                                approverId={approverViewer.id}
+                              />
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
