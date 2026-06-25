@@ -112,15 +112,22 @@ export function BasketDetailDialog({
   // ── Local approver action state ─────────────────────────────────
   const [commentDraft, setCommentDraft] = useState("")
 
+  // ── Controlled tab: default approvers to the approvals tab ──────
+  const [activeTab, setActiveTab] = useState<"holdings" | "approvals">("holdings")
+
   // Reset local state whenever the basket or viewer changes.
   useEffect(() => {
     if (basket) {
       setDraftName(basket.name)
       setDraftDesc(basket.description)
+
+      // Auto-focus the approvals tab for approvers who are on this basket
+      const isMine = basket.approvers.some((a) => a.name === viewer.name)
+      setActiveTab(viewer.role === "approver" && isMine ? "approvals" : "holdings")
     }
     setEditing(false)
     setCommentDraft("")
-  }, [basket, viewer])
+  }, [basket?.id, viewer.id])
 
   if (!basket) return null
 
@@ -256,11 +263,12 @@ export function BasketDetailDialog({
             viewer={viewer}
             myStatus={myApprover?.status}
             basketStatus={basket.status}
+            onGoToApprovals={() => setActiveTab("approvals")}
           />
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────── */}
-        <Tabs defaultValue="holdings" className="flex flex-col flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "holdings" | "approvals")} className="flex flex-col flex-1 overflow-hidden">
           <div className="px-6 pt-3 pb-0 shrink-0">
             <TabsList className="h-9 w-fit">
               <TabsTrigger value="holdings" className="gap-1.5 text-xs">
@@ -481,6 +489,7 @@ function RoleBanner({
   viewer,
   myStatus,
   basketStatus,
+  onGoToApprovals,
 }: {
   isCreator: boolean
   isRequiredApprover: boolean
@@ -488,38 +497,73 @@ function RoleBanner({
   viewer: Viewer
   myStatus?: ApproverStatus
   basketStatus: BasketStatus
+  onGoToApprovals: () => void
 }) {
-  let icon = <InfoIcon className="size-4 shrink-0" />
-  let tone = "border-border bg-muted/50 text-muted-foreground"
-  let message = ""
-
   if (isCreator) {
-    icon = <UserIcon className="size-4 shrink-0 text-primary" />
-    tone = "border-primary/20 bg-primary/5 text-foreground"
-    message =
-      "Viewing as the creator. You can edit the basket name and description. Holdings and approvals are read-only."
-  } else if (isRequiredApprover) {
-    if (canApprove) {
-      icon = <ShieldCheckIcon className="size-4 shrink-0 text-accent" />
-      tone = "border-accent/30 bg-accent/5 text-foreground"
-      message =
-        "You are a required approver. Review the holdings, then approve or reject in the Approval Chain tab."
-    } else if (myStatus && myStatus !== "Pending") {
-      icon = <CheckCircleIcon className="size-4 shrink-0 text-[var(--status-approved)]" />
-      tone = "border-border bg-muted/50 text-muted-foreground"
-      message = `You have already ${myStatus.toLowerCase()} this basket. Your decision is recorded below.`
-    } else {
-      message = `This basket is ${basketStatus}. No approval action is required from you right now.`
-    }
-  } else {
-    icon = <InfoIcon className="size-4 shrink-0" />
-    message = `Viewing as ${viewer.name}. You are not a required approver for this basket — view only.`
+    return (
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-foreground">
+        <UserIcon className="size-4 shrink-0 text-primary" />
+        <span>
+          Viewing as the creator. You can edit the basket name and description. Holdings and approvals are read-only.
+        </span>
+      </div>
+    )
   }
 
+  if (isRequiredApprover) {
+    if (canApprove) {
+      return (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2.5 text-xs text-foreground">
+          <div className="flex items-center gap-2">
+            <ShieldCheckIcon className="size-4 shrink-0 text-accent" />
+            <span>
+              Your approval is required on this basket. Review the holdings, then submit your decision.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onGoToApprovals}
+            className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[11px] font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+          >
+            Go to Approval Chain
+          </button>
+        </div>
+      )
+    }
+
+    if (myStatus && myStatus !== "Pending") {
+      const decided = myStatus === "Approved"
+      return (
+        <div className={`mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${decided ? "border-[var(--status-approved)]/25 bg-[var(--status-approved)]/5 text-foreground" : "border-destructive/25 bg-destructive/5 text-foreground"}`}>
+          {decided
+            ? <CheckCircleIcon className="size-4 shrink-0 text-[var(--status-approved)]" />
+            : <XCircleIcon className="size-4 shrink-0 text-destructive" />
+          }
+          <span>
+            You have already <strong>{myStatus.toLowerCase()}</strong> this basket. Your decision is recorded in the Approval Chain tab.
+          </span>
+        </div>
+      )
+    }
+
+    // Required approver but basket isn't in a reviewable state
+    return (
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+        <ClockIcon className="size-4 shrink-0" />
+        <span>
+          This basket is <strong>{basketStatus}</strong> and is not yet open for your review.
+        </span>
+      </div>
+    )
+  }
+
+  // Approver not on this basket
   return (
-    <div className={`mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${tone}`}>
-      {icon}
-      <span>{message}</span>
+    <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+      <InfoIcon className="size-4 shrink-0" />
+      <span>
+        Viewing as <strong>{viewer.name}</strong>. You are not a required approver for this basket.
+      </span>
     </div>
   )
 }
