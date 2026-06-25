@@ -127,7 +127,7 @@ export function CreateBasketDialog({ open, onOpenChange, onSave }: CreateBasketD
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto font-sans">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto font-sans">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-foreground">
             Create New Custom Basket

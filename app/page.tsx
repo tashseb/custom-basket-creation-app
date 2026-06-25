@@ -123,10 +123,10 @@ export default function HomePage() {
               <ChevronsUpDownIcon className="size-3.5 text-muted-foreground ml-1" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                View as
-              </DropdownMenuLabel>
               <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  View as
+                </DropdownMenuLabel>
                 {VIEWERS.filter((v) => v.role === "user").map((v) => (
                   <ViewerMenuItem
                     key={v.id}
@@ -137,10 +137,10 @@ export default function HomePage() {
                 ))}
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                Approvers
-              </DropdownMenuLabel>
               <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Approvers
+                </DropdownMenuLabel>
                 {VIEWERS.filter((v) => v.role === "approver").map((v) => (
                   <ViewerMenuItem
                     key={v.id}
@@ -170,7 +170,7 @@ export default function HomePage() {
           </Button>
         </div>
 
-        {/* ── Filters + search ────────────────────────────────────── */}
+        {/* ── Filters + search ────────────────────────────���───────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-1.5 flex-wrap">
             {FILTER_OPTIONS.map((status) => (

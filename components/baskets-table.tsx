@@ -112,24 +112,21 @@ function ApproverCard({ approver }: { approver: Approver }) {
   const meta = approverStatusMeta(approver.status)
   return (
     <HoverCard openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className={`relative flex items-center justify-center size-7 rounded-full text-[10px] font-bold ring-2 ring-offset-1 ring-offset-card cursor-default select-none transition-transform hover:scale-110 hover:z-10 ${meta.dot}`}
-          style={{ color: "white" }}
-          aria-label={`${approver.name} — ${meta.label}`}
-        >
-          {getInitials(approver.name)}
-          <span
-            className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-card ${
-              approver.status === "Approved"
-                ? "bg-[var(--status-approved)]"
-                : approver.status === "Rejected"
-                ? "bg-destructive"
-                : "bg-[var(--status-pending)]"
-            }`}
-          />
-        </button>
+      <HoverCardTrigger
+        className={`relative flex items-center justify-center size-7 rounded-full text-[10px] font-bold ring-2 ring-offset-1 ring-offset-card cursor-default select-none transition-transform hover:scale-110 hover:z-10 ${meta.dot}`}
+        style={{ color: "white" }}
+        aria-label={`${approver.name} — ${meta.label}`}
+      >
+        {getInitials(approver.name)}
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-card ${
+            approver.status === "Approved"
+              ? "bg-[var(--status-approved)]"
+              : approver.status === "Rejected"
+              ? "bg-destructive"
+              : "bg-[var(--status-pending)]"
+          }`}
+        />
       </HoverCardTrigger>
       <HoverCardContent
         side="top"

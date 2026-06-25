@@ -164,7 +164,7 @@ export function BasketDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-[1100px] sm:max-w-[1100px] max-h-[90vh] flex flex-col overflow-hidden font-sans p-0">
+      <DialogContent className="sm:max-w-[1100px] max-h-[90vh] flex flex-col overflow-hidden font-sans p-0">
 
         {/* ── Header ─────────────────────────────────────────────── */}
         <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
