@@ -278,7 +278,7 @@ export function BasketsTable({ baskets, onRowClick, onDelete, onDuplicate }: Bas
   }
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-xl border border-border overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-muted/60 border-b border-border">
@@ -306,7 +306,7 @@ export function BasketsTable({ baskets, onRowClick, onDelete, onDuplicate }: Bas
             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-left">
               Category
             </th>
-            <th className="px-4 py-3 w-12">
+            <th className="sticky right-0 z-10 w-12 bg-muted/60 px-4 py-3 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.08)]">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
@@ -374,8 +374,12 @@ export function BasketsTable({ baskets, onRowClick, onDelete, onDuplicate }: Bas
                 </Badge>
               </td>
 
-              {/* Row actions */}
-              <td className="px-4 py-4 text-right">
+              {/* Row actions (pinned to the right edge) */}
+              <td
+                className={`sticky right-0 z-10 px-4 py-4 text-right shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.08)] ${
+                  i % 2 === 0 ? "bg-card" : "bg-[oklch(0.968_0_0)]"
+                }`}
+              >
                 <BasketRowActions
                   basket={basket}
                   onDelete={onDelete}
