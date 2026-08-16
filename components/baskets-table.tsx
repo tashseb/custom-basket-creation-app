@@ -18,10 +18,13 @@ import {
 } from "lucide-react"
 import type { Basket, BasketStatus, Approver } from "@/lib/data"
 import { useState } from "react"
+import { BasketRowActions } from "@/components/basket-row-actions"
 
 interface BasketsTableProps {
   baskets: Basket[]
   onRowClick: (basket: Basket) => void
+  onDelete: (id: string) => void
+  onDuplicate: (basket: Basket, mode: "details" | "full") => void
 }
 
 type SortKey = "name" | "status" | "totalValue" | "stockCount" | "riskRating" | "createdAt"
@@ -234,7 +237,7 @@ const COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "createdAt", label: "Created" },
 ]
 
-export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
+export function BasketsTable({ baskets, onRowClick, onDelete, onDuplicate }: BasketsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("createdAt")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
 
@@ -275,7 +278,7 @@ export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
   }
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-xl border border-border overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-muted/60 border-b border-border">
@@ -302,6 +305,9 @@ export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
             </th>
             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-left">
               Category
+            </th>
+            <th className="sticky right-0 z-10 w-12 bg-muted/60 px-4 py-3 shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.08)]">
+              <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
@@ -366,6 +372,19 @@ export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
                 <Badge variant="outline" className="text-xs text-muted-foreground border-border">
                   {basket.category}
                 </Badge>
+              </td>
+
+              {/* Row actions (pinned to the right edge) */}
+              <td
+                className={`sticky right-0 z-10 px-4 py-4 text-right shadow-[-8px_0_8px_-6px_rgba(0,0,0,0.08)] ${
+                  i % 2 === 0 ? "bg-card" : "bg-[oklch(0.968_0_0)]"
+                }`}
+              >
+                <BasketRowActions
+                  basket={basket}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                />
               </td>
             </tr>
           ))}
