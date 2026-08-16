@@ -18,10 +18,13 @@ import {
 } from "lucide-react"
 import type { Basket, BasketStatus, Approver } from "@/lib/data"
 import { useState } from "react"
+import { BasketRowActions } from "@/components/basket-row-actions"
 
 interface BasketsTableProps {
   baskets: Basket[]
   onRowClick: (basket: Basket) => void
+  onDelete: (id: string) => void
+  onDuplicate: (basket: Basket, mode: "details" | "full") => void
 }
 
 type SortKey = "name" | "status" | "totalValue" | "stockCount" | "riskRating" | "createdAt"
@@ -234,7 +237,7 @@ const COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "createdAt", label: "Created" },
 ]
 
-export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
+export function BasketsTable({ baskets, onRowClick, onDelete, onDuplicate }: BasketsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("createdAt")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
 
@@ -303,6 +306,9 @@ export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-left">
               Category
             </th>
+            <th className="px-4 py-3 w-12">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -366,6 +372,15 @@ export function BasketsTable({ baskets, onRowClick }: BasketsTableProps) {
                 <Badge variant="outline" className="text-xs text-muted-foreground border-border">
                   {basket.category}
                 </Badge>
+              </td>
+
+              {/* Row actions */}
+              <td className="px-4 py-4 text-right">
+                <BasketRowActions
+                  basket={basket}
+                  onDelete={onDelete}
+                  onDuplicate={onDuplicate}
+                />
               </td>
             </tr>
           ))}

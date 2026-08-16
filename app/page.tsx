@@ -62,6 +62,48 @@ export default function HomePage() {
     setBaskets((prev) => [newBasket, ...prev])
   }
 
+  const handleDeleteBasket = (id: string) => {
+    // Removing the basket also drops its constituents and approval records,
+    // since those live on the basket object itself.
+    setBaskets((prev) => prev.filter((b) => b.id !== id))
+    if (selectedBasket?.id === id) {
+      setDetailOpen(false)
+      setSelectedBasket(null)
+    }
+  }
+
+  const handleDuplicateBasket = (source: Basket, mode: "details" | "full") => {
+    const today = new Date().toISOString().split("T")[0]
+    const nextId = `bsk-${String(baskets.length + 1).padStart(3, "0")}`
+    const keepConstituents = mode === "full"
+    const stocks = keepConstituents
+      ? source.stocks.map((s, i) => ({ ...s, id: `${nextId}-s${i + 1}` }))
+      : []
+
+    const duplicate: Basket = {
+      ...source,
+      id: nextId,
+      name: `${source.name} (Copy)`,
+      status: "Draft",
+      createdBy: viewer.name,
+      createdAt: today,
+      updatedAt: today,
+      stocks,
+      stockCount: stocks.length,
+      // A duplicate always starts a fresh approval cycle, regardless of mode.
+      approvers: source.approvers.map((a, i) => ({
+        id: `${nextId}-a${i + 1}`,
+        name: a.name,
+        role: a.role,
+        department: a.department,
+        status: "Pending" as const,
+      })),
+      // Draft baskets carry no committed value until re-priced.
+      totalValue: 0,
+    }
+    setBaskets((prev) => [duplicate, ...prev])
+  }
+
   const filtered = baskets.filter((b) => {
     const matchStatus = filterStatus === "All" || b.status === filterStatus
     const matchSearch =
@@ -217,7 +259,12 @@ export default function HomePage() {
             <span className="font-medium text-foreground">{filtered.length}</span> of{" "}
             <span className="font-medium text-foreground">{baskets.length}</span> baskets
           </span>
-          <BasketsTable baskets={filtered} onRowClick={handleRowClick} />
+          <BasketsTable
+            baskets={filtered}
+            onRowClick={handleRowClick}
+            onDelete={handleDeleteBasket}
+            onDuplicate={handleDuplicateBasket}
+          />
         </div>
       </main>
 
