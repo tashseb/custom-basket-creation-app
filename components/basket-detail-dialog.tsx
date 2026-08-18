@@ -27,8 +27,20 @@ import {
   UserIcon,
   LinkIcon,
   CheckIcon,
+  SendIcon,
+  CloudUploadIcon,
 } from "lucide-react"
-import { VIEWERS, type Basket, type ApproverStatus, type BasketStatus, type Approver, type Viewer } from "@/lib/data"
+import {
+  VIEWERS,
+  WORKFLOW_STEPS,
+  getWorkflowStage,
+  type Basket,
+  type ApproverStatus,
+  type BasketStatus,
+  type Viewer,
+  type WorkflowStage,
+} from "@/lib/data"
+import { BasketStepper } from "@/components/basket-stepper"
 
 interface BasketDetailDialogProps {
   basket: Basket | null
@@ -54,14 +66,6 @@ function formatDate(date: string) {
 
 function todayISO() {
   return new Date().toISOString().split("T")[0]
-}
-
-// Recompute basket status from its approver decisions.
-function deriveStatus(approvers: Approver[], current: BasketStatus): BasketStatus {
-  if (current === "Draft") return "Draft"
-  if (approvers.some((a) => a.status === "Rejected")) return "Rejected"
-  if (approvers.length > 0 && approvers.every((a) => a.status === "Approved")) return "Active"
-  return "Pending Approval"
 }
 
 function StatusBadge({ status }: { status: BasketStatus }) {
@@ -179,8 +183,14 @@ export function BasketDetailDialog({
   const canApprove =
     isRequiredApprover && basket.status === "Pending Approval" && myApprover?.status === "Pending"
 
-  // Creator may edit name/description on a real (created) basket.
-  const canEditDetails = isCreator
+  // ── Workflow position ───────────────────────────────────────────
+  const stage = getWorkflowStage(basket)
+  const isRejected = basket.status === "Rejected"
+  const allApproved =
+    totalApprovers > 0 && basket.approvers.every((a) => a.status === "Approved")
+
+  // Creator may edit name/description until the basket is created (closed).
+  const canEditDetails = isCreator && stage !== "completed"
 
   function handleSaveDetails() {
     if (!basket) return
@@ -200,12 +210,22 @@ export function BasketDetailDialog({
           }
         : a
     )
+    // A rejection stops the workflow; full approval does NOT auto-activate —
+    // the creator must still submit to the API to finalize the basket.
+    const rejected = updatedApprovers.some((a) => a.status === "Rejected")
     onUpdateBasket({
       ...basket,
       approvers: updatedApprovers,
-      status: deriveStatus(updatedApprovers, basket.status),
+      status: rejected ? "Rejected" : "Pending Approval",
+      stage: "approval",
     })
     setCommentDraft("")
+  }
+
+  // Advance the basket to the next workflow stage (creator-driven).
+  function advanceStage(next: WorkflowStage, status?: BasketStatus) {
+    if (!basket) return
+    onUpdateBasket({ ...basket, stage: next, ...(status ? { status } : {}) })
   }
 
   return (
@@ -303,6 +323,19 @@ export function BasketDetailDialog({
             myStatus={myApprover?.status}
             basketStatus={basket.status}
             onGoToApprovals={() => setActiveTab("approvals")}
+          />
+        </div>
+
+        {/* ── Workflow stepper + contextual action ───────────────── */}
+        <div className="flex flex-col gap-4 border-b border-border bg-muted/20 px-6 py-4 shrink-0">
+          <BasketStepper currentStage={stage} rejected={isRejected} />
+          <WorkflowBar
+            stage={stage}
+            isCreator={isCreator}
+            isRejected={isRejected}
+            allApproved={allApproved}
+            onAdvance={advanceStage}
+            onViewApprovals={() => setActiveTab("approvals")}
           />
         </div>
 
@@ -612,6 +645,103 @@ function RoleBanner({
       <span>
         Viewing as <strong>{viewer.name}</strong>. You are not a required approver for this basket.
       </span>
+    </div>
+  )
+}
+
+function WorkflowBar({
+  stage,
+  isCreator,
+  isRejected,
+  allApproved,
+  onAdvance,
+  onViewApprovals,
+}: {
+  stage: WorkflowStage
+  isCreator: boolean
+  isRejected: boolean
+  allApproved: boolean
+  onAdvance: (next: WorkflowStage, status?: BasketStatus) => void
+  onViewApprovals: () => void
+}) {
+  // Terminal states first.
+  if (stage === "completed") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-[var(--status-approved)]/25 bg-[var(--status-approved)]/5 px-3 py-2.5 text-xs leading-relaxed text-foreground">
+        <CheckCircleIcon className="size-4 shrink-0 text-[var(--status-approved)]" />
+        <span>
+          This basket has been submitted to the API and created. It is now <strong>closed</strong> for
+          further processing or updates.
+        </span>
+      </div>
+    )
+  }
+
+  if (isRejected) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-xs leading-relaxed text-foreground">
+        <XCircleIcon className="size-4 shrink-0 text-destructive" />
+        <span>
+          This basket was <strong>rejected</strong> during approval. Review the approver feedback in
+          the Approval Chain tab.
+        </span>
+      </div>
+    )
+  }
+
+  // Active workflow: message + the action that moves to the next stage.
+  const config = {
+    draft: {
+      msg: "This basket is a draft. Send it to the lending desk to begin checks.",
+      label: "Send to Lending for Checking",
+      icon: SendIcon,
+      onClick: () => onAdvance("checking"),
+      variant: undefined as "outline" | undefined,
+    },
+    checking: {
+      msg: "Lending checks are underway. Make any final adjustments, then route the basket for approval.",
+      label: "Send for Approval",
+      icon: SendIcon,
+      onClick: () => onAdvance("approval", "Pending Approval"),
+      variant: undefined as "outline" | undefined,
+    },
+    approval: allApproved
+      ? {
+          msg: "All approvers have signed off. Submit the basket to the execution API to finalize it.",
+          label: "Submit to API",
+          icon: CloudUploadIcon,
+          onClick: () => onAdvance("completed", "Active"),
+          variant: undefined as "outline" | undefined,
+        }
+      : {
+          msg: "Awaiting approver sign-off. Track progress in the Approval Chain tab.",
+          label: "View Approval Chain",
+          icon: ShieldCheckIcon,
+          onClick: onViewApprovals,
+          variant: "outline" as const,
+        },
+  }[stage as "draft" | "checking" | "approval"]
+
+  if (!config) return null
+
+  const Icon = config.icon
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2.5">
+      <div className="flex items-center gap-2 text-xs leading-relaxed text-foreground">
+        <InfoIcon className="size-4 shrink-0 text-accent" />
+        <span>{config.msg}</span>
+      </div>
+      {isCreator ? (
+        <Button size="sm" variant={config.variant} onClick={config.onClick} className="shrink-0">
+          <Icon data-icon="inline-start" />
+          {config.label}
+        </Button>
+      ) : (
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+          Awaiting creator
+        </span>
+      )}
     </div>
   )
 }
