@@ -2,6 +2,9 @@ export type BasketStatus = "Active" | "Pending Approval" | "Draft" | "Rejected"
 
 export type ApproverStatus = "Approved" | "Pending" | "Rejected"
 
+// The lifecycle a basket moves through, in order.
+export type WorkflowStage = "draft" | "checking" | "approval" | "completed"
+
 // ─── Viewer / Role model ─────────────────────────────────────────────────────
 
 export type ViewerRole = "user" | "approver"
@@ -57,6 +60,34 @@ export interface Basket {
   approvers: Approver[]
   riskRating: "Low" | "Medium" | "High"
   category: string
+  // Explicit workflow position. When absent it is derived from `status`.
+  stage?: WorkflowStage
+}
+
+// Ordered steps shown in the basket detail stepper.
+export const WORKFLOW_STEPS: { stage: WorkflowStage; label: string; caption: string }[] = [
+  { stage: "draft", label: "Draft", caption: "Basket created" },
+  { stage: "checking", label: "Lending Check", caption: "Reviewed by lending" },
+  { stage: "approval", label: "Approval", caption: "Approver sign-off" },
+  { stage: "completed", label: "Created", caption: "Submitted to API" },
+]
+
+// Derive the current workflow stage, falling back to the legacy status field
+// for baskets that predate explicit stage tracking.
+export function getWorkflowStage(basket: Pick<Basket, "status" | "stage">): WorkflowStage {
+  if (basket.stage) return basket.stage
+  switch (basket.status) {
+    case "Draft":
+      return "draft"
+    case "Pending Approval":
+      return "approval"
+    case "Active":
+      return "completed"
+    case "Rejected":
+      return "approval"
+    default:
+      return "draft"
+  }
 }
 
 // ─── Mock Data ──────────────────────────────────────────────────────────────
